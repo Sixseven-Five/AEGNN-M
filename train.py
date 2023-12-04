@@ -227,15 +227,19 @@ def epoch_train(args):
             if best_auc < auc:
                 best_auc = auc
                 stopping_monitor = 0
-                print('best_auc：', best_auc)
+                if dataset_type == 'classification':
+                    print('best_auc：', best_auc)
+                else:
+                    print('best_mse：', abs(best_auc))
                 save_AUCs(AUCs, valid_AUCs)
 
                 S, T = predicting(model,test_data_dict, test_data, batch_size,dataset_type)
                 if dataset_type == 'classification':
                     auc = roc_auc_score(T, S)
+                    print('test_auc: ', auc)
                 else:
                     auc = -1*mean_squared_error(T, S)
-                print('test_AUC: ', auc)
+                    print('test_mse: ', abs(auc))
 
                 independent_num.append(T)
                 independent_num.append(S)

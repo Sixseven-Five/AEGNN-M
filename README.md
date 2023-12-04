@@ -33,6 +33,10 @@ Args:
 
 E.g.
 
+run easily
+
+`python train.py     `
+
 for classification task
 
 `python train.py  --dataset_name 'bbbp.csv' --data_dir './data/MoleculeNet/' --save_dir './result/model/'  --log_dir './result/log/' --dataset_type 'classification' --task_num  1    `
