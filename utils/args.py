@@ -26,7 +26,7 @@ def add_train_argument(p):
 
 def set_train_argument():
     p = ArgumentParser()
-    add_train_argument(p)  #传终端输入的参数
+    add_train_argument(p)
     args = p.parse_args()
     
     # assert args.data_path
@@ -35,7 +35,7 @@ def set_train_argument():
     # mkdir(args.save_path)
     
     # if args.metric is None:
-    #     if args.dataset_type == 'classification': #这里定义了评估函数
+    #     if args.dataset_type == 'classification':
     #         args.metric = 'auc'
     #     elif args.dataset_type == 'regression':
     #         args.metric = 'rmse'

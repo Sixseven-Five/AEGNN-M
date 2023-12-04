@@ -17,7 +17,7 @@ def mkdir(path,isdir = True):
     if path != '':
         os.makedirs(path, exist_ok = True)
 
-#定义日志对象，并创建输出日志的目录，将日志输出到debug.log下
+
 def set_log(name,save_path):
     log = logging.getLogger(name)
     log.setLevel(logging.DEBUG)
@@ -34,20 +34,20 @@ def set_log(name,save_path):
     
     return log
 
-#返回文件第一行的标题
+
 def get_header(path):
     with open(path) as file:
         header = next(csv.reader(file))
     
     return header
 
-#除第一列外所有标题
+
 def get_task_name(path):
     task_name = get_header(path)[1:]
     
     return task_name
 
-#读取数据去掉没有smile的行，生成MoleDataSet的数据集
+
 
 def load_data(path):
     with open(path) as file:
@@ -57,18 +57,18 @@ def load_data(path):
         for line in reader:
             lines.append(line)
         data = []
-        for line in lines:  #每条数据转化为Moledata格式
+        for line in lines:
             one = MoleData(line)
             data.append(one)
         data = MoleDataSet(data)
         
         fir_data_len = len(data)
         data_val = []
-        smi_exist = [] #存的有mol的下标，也是smile存在的下标
+        smi_exist = []
         for i in range(fir_data_len):
             if data[i].mol is not None:
                 smi_exist.append(i)
-        data_val = MoleDataSet([data[i] for i in smi_exist]) #去掉没有smile的数据，保存有用的数据
+        data_val = MoleDataSet([data[i] for i in smi_exist])
         now_data_len = len(data_val)
         print('There are ',now_data_len,' smiles in total.')
         if fir_data_len - now_data_len > 0:
@@ -76,23 +76,23 @@ def load_data(path):
         
     return data_val
 
-#对MoleDataSet的list进行切分
 
-def split_data(data,type,size,seed,log):#size是一个三列的数据，传的是，train,val,test的比例 ,default=[0.8,0.1,0.1] ,type的default='random'
+
+def split_data(data,type,size,seed,log):
     assert len(size) == 3
     assert sum(size) == 1
-    #指定随机种子切分
+
     if type == 'random':
         data.random_data(seed)
         train_size = int(size[0] * len(data))
         val_size = int(size[1] * len(data))
         train_val_size = train_size + val_size
-        train_data = data[:train_size] #这快调用的重写的函数
+        train_data = data[:train_size]
         val_data = data[train_size:train_val_size]
         test_data = data[train_val_size:]
     
         return MoleDataSet(train_data),MoleDataSet(val_data),MoleDataSet(test_data)
-    elif type == 'scaffold':  # 根据这个scaffold进行划分，可以看看这个scaffod
+    elif type == 'scaffold':
         return scaffold_split(data, size, seed, log)
     else:
         return None
@@ -104,7 +104,7 @@ def split_data(data,type,size,seed,log):#size是一个三列的数据，传的�
     '''
 
 
-def get_label_scaler(data): #对data的标签做了归一化
+def get_label_scaler(data):
     smile = data.smile()
     label = data.label()
     
@@ -115,7 +115,7 @@ def get_label_scaler(data): #对data的标签做了归一化
     std = np.where(np.isnan(std),np.ones(std.shape),std)
     std = np.where(std==0,np.ones(std.shape),std)
     
-    change_1 = (label-ave)/std #做了归一话的标签
+    change_1 = (label-ave)/std
     label_changed = np.where(np.isnan(change_1),None,change_1)
     label_changed.tolist()
     data.change_label(label_changed)
@@ -124,9 +124,9 @@ def get_label_scaler(data): #对data的标签做了归一化
 
 def get_loss(type):
     if type == 'classification':
-        return nn.BCELoss()   #分类用BCEloss，先sigmoid再求交叉熵，返回的是个向量
+        return nn.BCELoss()
     elif type == 'regression':
-        return nn.MSELoss()   #回归用mseloss,均方误差(y_pre-y_true)的平方，返回的是个向量
+        return nn.MSELoss()
     else:
         raise ValueError('data type Error.')
 
@@ -141,7 +141,7 @@ def rmse(label,pred):
 
 def get_metric(metric):
     if metric == 'auc':
-        return roc_auc_score #sklearn.metrics内置的评估函数,暂时不咋会用
+        return roc_auc_score
     elif metric == 'prc-auc':
         return prc_auc
     elif metric == 'rmse':

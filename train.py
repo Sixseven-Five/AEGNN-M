@@ -10,7 +10,7 @@ import os
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-# 等变神经网络  非几何信息：点和边      几何信息：坐标
+
 def save_AUCs(AUCs, filename):
     with open(filename, 'a') as f:
         f.write('\t'.join(map(str, AUCs)) + '\n')
@@ -23,10 +23,10 @@ def compute_mae_mse_rmse(target, prediction):
     squaredError = []
     absError = []
     for val in error:
-        squaredError.append(val * val)  # target-prediction之差平方
-        absError.append(abs(val))  # 误差绝对值
-    mae = sum(absError) / len(absError)  # 平均绝对误差MAE
-    mse = sum(squaredError) / len(squaredError)  # 均方误差MSE
+        squaredError.append(val * val)
+        absError.append(abs(val))
+    mae = sum(absError) / len(absError)
+    mse = sum(squaredError) / len(squaredError)
     RMSE = mse ** 0.5
     return mae, mse, RMSE
 
@@ -58,7 +58,7 @@ def process_data(data, iter_step):
     mask_batch_all = []
 
     for i in range(0, len(data), iter_step):
-        if smile_used + iter_step > len(data):  # 这个判断好像有点多余
+        if smile_used + iter_step > len(data):
             data_now = MoleDataSet(data[i:len(data)])
         else:
             data_now = MoleDataSet(data[i:i + iter_step])
@@ -104,7 +104,6 @@ def predicting(model, val_data_dict, data, batch_size,dataset_type):
 
 
         with torch.no_grad():
-            #automs_index, feats_batch, edges_batch, coors_batch, adj_batch, mask_batch = smile_to_graph(smile)
             pred_now = model(automs_index_all[count], feats_batch_all[count], edges_batch_all[count],
                              coors_batch_all[count],
                              adj_batch_all[count], mask_batch_all[count], batch_size,dataset_type)
@@ -135,7 +134,7 @@ def train(model, data, train_data_dict, optimizer, loss_f, batch,dataset_type):
 
     count = 0
     for i in range(0, len(data), iter_step):
-        if data_used + iter_step > len(data):  # 这个判断好像有点多余
+        if data_used + iter_step > len(data):
             data_now = MoleDataSet(data[i:len(data)])
             batch = len(data)-i
         else:
@@ -143,8 +142,8 @@ def train(model, data, train_data_dict, optimizer, loss_f, batch,dataset_type):
 
         label = data_now.label()
 
-        mask = torch.Tensor([[x is not None for x in tb] for tb in label])  # 这里为了防止有些无标签
-        target = torch.Tensor([[0 if x is None else x for x in tb] for tb in label])  # 这个target把无标签的当0处理
+        mask = torch.Tensor([[x is not None for x in tb] for tb in label])
+        target = torch.Tensor([[0 if x is None else x for x in tb] for tb in label])
 
         if next(model.parameters()).is_cuda:
             mask, target = mask.cuda(), target.cuda()
@@ -166,11 +165,8 @@ def train(model, data, train_data_dict, optimizer, loss_f, batch,dataset_type):
 
 
 def epoch_train(args):
-    # dataset_name='MDA-MB-231'
-    # data_path = './data/BreastCellLines/'+dataset_name+'.csv'
     dataset_name = args.dataset_name
     data_path = args.data_dir + dataset_name
-    # args = None
     data = load_data(data_path)
     split_ratio = args.split_ratio
     seed = args.seed
@@ -244,7 +240,7 @@ def epoch_train(args):
                 independent_num.append(T)
                 independent_num.append(S)
 
-                # 保存模型
+
                 print('save model weights')
                 torch.save(model.state_dict(), model_load_path)
 
@@ -255,7 +251,7 @@ def epoch_train(args):
             if stopping_monitor > 20:
                 break
 
-    # 最终效果最好的参数模型下载
+
     model.load_state_dict(torch.load(model_load_path, map_location='cuda:0'))
     S, T = predicting(model,test_data_dict, test_data, batch_size,dataset_type)
     mae, mse, rmse = compute_mae_mse_rmse(S, T)
@@ -270,7 +266,6 @@ def epoch_train(args):
     AUCs = [0, abs(auc), R2, mse, mae, rmse, r2]
     print('test_AUC: ', AUCs)
     # save data
-    #test_AUCs = '../result/log/'+dataset_name+'/testAUCs_' + encoder_file + '.txt'
     test_AUCs = args.log_dir + 'testAUCs_' + encoder_file + '.txt'
     save_AUCs(AUCs, test_AUCs)
 
@@ -278,23 +273,11 @@ if __name__ == '__main__':
 
     args = set_train_argument()
     print(args)
-    # args.dataset_name='freesolv.csv'
-    # args.data_dir='./data/Regression/'
-    # args.dataset_type='regression'
-    # python train.py --dataset_name 'freesolv.csv' --data_dir './data/Regression/' --dataset_type 'regression'
-
-
-
-
-
-
-
     epoch_train(args)
 
 
 
 
 
-# feats_out, coors_out = net(feats_batch, coors_batch, edges = edges_batch, mask = mask_batch, adj_mat = adj_batch) # (1, 1024, 32), (1, 1024, 3)
-# feats三维，coors三维，edges四维，mask三维
+
 
