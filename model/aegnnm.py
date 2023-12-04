@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
-# helper functions
 
 def exists(val):
     return val is not None
@@ -59,10 +58,7 @@ class Swish_(nn.Module):
 
 SiLU = nn.SiLU if hasattr(nn, 'SiLU') else Swish_
 
-# helper classes
 
-# this follows the same strategy for normalization as done in SE3 Transformers
-# https://github.com/lucidrains/se3-transformer-pytorch/blob/main/se3_transformer_pytorch/se3_transformer_pytorch.py#L95
 
 class CoorsNorm(nn.Module):
     def __init__(self, eps = 1e-8, scale_init = 1.):
@@ -76,8 +72,7 @@ class CoorsNorm(nn.Module):
         normed_coors = coors / norm.clamp(min = self.eps)
         return normed_coors * self.scale
 
-# global linear attention
-#就是GAT的操作
+
 class Attention(nn.Module):
     def __init__(self, dim, heads = 8, dim_head = 64):
         super().__init__()
@@ -96,7 +91,7 @@ class Attention(nn.Module):
         kv = self.to_kv(context).chunk(2, dim = -1)
 
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), (q, *kv))
-        dots = einsum('b h i d, b h j d -> b h i j', q, k) * self.scale #张量乘法
+        dots = einsum('b h i d, b h j d -> b h i j', q, k) * self.scale
 
         if exists(mask):
             mask_value = -torch.finfo(dots.dtype).max
@@ -109,6 +104,7 @@ class Attention(nn.Module):
         out = rearrange(out, 'b h n d -> b n (h d)', h = h)
         return self.to_out(out)
 
+# Graph Attention NetWorks
 class GlobalLinearAttention(nn.Module):
     def __init__(
         self,
@@ -144,7 +140,7 @@ class GlobalLinearAttention(nn.Module):
         return x, queries
 
 # classes
-
+# Equivariant Graph Neural Networks
 class EGNN(nn.Module):
     def __init__(
         self,
@@ -175,46 +171,46 @@ class EGNN(nn.Module):
         edge_input_dim = (fourier_features * 2) + (dim * 2) + edge_dim + 1
         dropout = nn.Dropout(dropout) if dropout > 0 else nn.Identity()
 
-        self.edge_mlp = nn.Sequential(  #edge_mlp边线性变化，有点像做嵌入
+        self.edge_mlp = nn.Sequential(
             nn.Linear(edge_input_dim, edge_input_dim * 2),
             dropout,
-            SiLU(),  #激活函数
+            SiLU(),
             nn.Linear(edge_input_dim * 2, m_dim),
             SiLU()
         )
 
-        self.edge_gate = nn.Sequential(     #edge_gate有点像二分类
+        self.edge_gate = nn.Sequential(
             nn.Linear(m_dim, 1),
             nn.Sigmoid()
         ) if soft_edges else None
 
-        self.node_norm = nn.LayerNorm(dim) if norm_feats else nn.Identity() #层归一化
-        self.coors_norm = CoorsNorm(scale_init = norm_coors_scale_init) if norm_coors else nn.Identity() #坐标归一化
+        self.node_norm = nn.LayerNorm(dim) if norm_feats else nn.Identity()
+        self.coors_norm = CoorsNorm(scale_init = norm_coors_scale_init) if norm_coors else nn.Identity()
 
-        self.m_pool_method = m_pool_method #池化方法
+        self.m_pool_method = m_pool_method
 
-        self.node_mlp = nn.Sequential( #点线性化，有点像做嵌入
+        self.node_mlp = nn.Sequential(
             nn.Linear(dim + m_dim, dim * 2),
             dropout,
             SiLU(),
             nn.Linear(dim * 2, dim),
         ) if update_feats else None
 
-        self.coors_mlp = nn.Sequential(#坐标线性化，有点像做嵌入
+        self.coors_mlp = nn.Sequential(
             nn.Linear(m_dim, m_dim * 4),
             dropout,
             SiLU(),
             nn.Linear(m_dim * 4, 1)
         ) if update_coors else None
 
-        self.num_nearest_neighbors = num_nearest_neighbors  #最近邻居数量
-        self.only_sparse_neighbors = only_sparse_neighbors  #稀疏邻居
-        self.valid_radius = valid_radius  #有效范围，正无穷
+        self.num_nearest_neighbors = num_nearest_neighbors
+        self.only_sparse_neighbors = only_sparse_neighbors
+        self.valid_radius = valid_radius
 
         self.coor_weights_clamp_value = coor_weights_clamp_value
 
         self.init_eps = init_eps
-        self.apply(self.init_)  #这个是用来初始化一些线性层，卷积层的的函数
+        self.apply(self.init_)
 
     def init_(self, module):
         if type(module) in {nn.Linear}:
@@ -230,18 +226,18 @@ class EGNN(nn.Module):
         use_nearest = num_nearest > 0 or only_sparse_neighbors
 
         rel_coors = rearrange(coors, 'b i d -> b i () d') - rearrange(coors, 'b j d -> b () j d')
-        rel_dist = (rel_coors ** 2).sum(dim = -1, keepdim = True)   #这块应该是做了|xi-xj| 距离信息也就是几何信息标量化
+        rel_dist = (rel_coors ** 2).sum(dim = -1, keepdim = True)
 
         i = j = n
 
         if use_nearest:
-            ranking = rel_dist[..., 0].clone()   #去掉里面那一层了，表示i,j距离信息
+            ranking = rel_dist[..., 0].clone()
 
             if exists(mask):
-                rank_mask = mask[:, :, None] * mask[:, None, :]  #二维mask改成带bach形式的mask
-                ranking.masked_fill_(~rank_mask, 1e5)   #b被mask取0了的距离信息取 1e5
+                rank_mask = mask[:, :, None] * mask[:, None, :]
+                ranking.masked_fill_(~rank_mask, 1e5)
 
-            if exists(adj_mat): #转化为batch形式
+            if exists(adj_mat):
                 if len(adj_mat.shape) == 2:
                     adj_mat = repeat(adj_mat.clone(), 'i j -> b i j', b = b)
 
@@ -249,15 +245,15 @@ class EGNN(nn.Module):
                     num_nearest = int(adj_mat.float().sum(dim = -1).max().item())
                     valid_radius = 0
 
-                self_mask = rearrange(torch.eye(n, device = device, dtype = torch.bool), 'i j -> () i j')  #相当于单位矩阵
+                self_mask = rearrange(torch.eye(n, device = device, dtype = torch.bool), 'i j -> () i j')
 
-                adj_mat = adj_mat.masked_fill(self_mask, False).bool()  #原本的邻接矩阵自己和自己的部分要为1
-                ranking.masked_fill_(self_mask, -1.)  #ranking相当于做mask任务和没有连接的点,自己和自己的距离是-1,相连接是0
+                adj_mat = adj_mat.masked_fill(self_mask, False).bool()
+                ranking.masked_fill_(self_mask, -1.)
                 ranking.masked_fill_(adj_mat, 0.)
                 if ranking.shape[1]<num_nearest:
                     num_nearest = ranking.shape[1]
                 try:
-                    nbhd_ranking, nbhd_indices = ranking.topk(num_nearest, dim = -1, largest = False)  #最小到大排序吧，按照距离无边>连接>自己和自己
+                    nbhd_ranking, nbhd_indices = ranking.topk(num_nearest, dim = -1, largest = False)
                 except:
                     print(coors)
                     print(rel_dist)
@@ -287,12 +283,12 @@ class EGNN(nn.Module):
         feats_i = rearrange(feats, 'b i d -> b i () d')
         feats_i, feats_j = broadcast_tensors(feats_i, feats_j)
 
-        edge_input = torch.cat((feats_i, feats_j, rel_dist), dim = -1)   #非几何节点信息+几何信息标量化
+        edge_input = torch.cat((feats_i, feats_j, rel_dist), dim = -1)
 
         if exists(edges):
-            edge_input = torch.cat((edge_input, edges), dim = -1)   #有边则也拼接
+            edge_input = torch.cat((edge_input, edges), dim = -1)
 
-        m_ij = self.edge_mlp(edge_input)     #第一个不变性的公式,即使几何信息变化这里和也不会变
+        m_ij = self.edge_mlp(edge_input)
 
         if exists(self.edge_gate):
             m_ij = m_ij * self.edge_gate(m_ij)
@@ -311,7 +307,7 @@ class EGNN(nn.Module):
             coor_weights = self.coors_mlp(m_ij)
             coor_weights = rearrange(coor_weights, 'b i j () -> b i j')
 
-            rel_coors = self.coors_norm(rel_coors)  #几何信息
+            rel_coors = self.coors_norm(rel_coors)
 
             if exists(mask):
                 coor_weights.masked_fill_(~mask, 0.)
@@ -320,7 +316,7 @@ class EGNN(nn.Module):
                 clamp_value = self.coor_weights_clamp_value
                 coor_weights.clamp_(min = -clamp_value, max = clamp_value)
 
-            coors_out = einsum('b i j, b i j c -> b i c', coor_weights, rel_coors) + coors  #第二个公式等变性
+            coors_out = einsum('b i j, b i j c -> b i c', coor_weights, rel_coors) + coors
         else:
             coors_out = coors
 
@@ -338,15 +334,15 @@ class EGNN(nn.Module):
                     m_i = m_ij.mean(dim = -2)
 
             elif self.m_pool_method == 'sum':
-                m_i = m_ij.sum(dim = -2)  #第三个公式求和
+                m_i = m_ij.sum(dim = -2)
 
             normed_feats = self.node_norm(feats)
             node_mlp_input = torch.cat((normed_feats, m_i), dim = -1)
-            node_out = self.node_mlp(node_mlp_input) + feats  #第四个公式
+            node_out = self.node_mlp(node_mlp_input) + feats
         else:
             node_out = feats
 
-        return node_out, coors_out  #node_out第4个公式求出来的点，coors_out第二个公式求出来的边信息
+        return node_out, coors_out
 
 class EGNN_Network(nn.Module):
     def __init__(
@@ -356,11 +352,11 @@ class EGNN_Network(nn.Module):
         dim,
         num_tokens = None,
         num_edge_tokens = None,
-        num_positions = None,  #点的数量，也就是位置的数量
+        num_positions = None,
         edge_dim = 0,
         num_adj_degrees = None,
         adj_dim = 0,
-        global_linear_attn_every = 1, #这里
+        global_linear_attn_every = 1,
         global_linear_attn_heads = 8,
         global_linear_attn_dim_head = 64,
         num_global_tokens = 4,
@@ -371,21 +367,21 @@ class EGNN_Network(nn.Module):
         assert not (exists(num_adj_degrees) and num_adj_degrees < 1), 'make sure adjacent degrees is greater than 1'
         self.num_positions = num_positions
 
-        self.token_emb = nn.Embedding(num_tokens, dim) if exists(num_tokens) else None    #点特征嵌入  词向量是21
-        self.pos_emb = nn.Embedding(num_positions, dim) if exists(num_positions) else None #位置特征嵌入
-        self.edge_emb = nn.Embedding(num_edge_tokens, edge_dim) if exists(num_edge_tokens) else None  #边特征嵌入
+        self.token_emb = nn.Embedding(num_tokens, dim) if exists(num_tokens) else None
+        self.pos_emb = nn.Embedding(num_positions, dim) if exists(num_positions) else None
+        self.edge_emb = nn.Embedding(num_edge_tokens, edge_dim) if exists(num_edge_tokens) else None
         self.has_edges = edge_dim > 0
 
-        self.num_adj_degrees = num_adj_degrees  #边的角度嵌入  个人感觉还是非几何信息
+        self.num_adj_degrees = num_adj_degrees
         self.adj_emb = nn.Embedding(num_adj_degrees + 1, adj_dim) if exists(num_adj_degrees) and adj_dim > 0 else None
 
         edge_dim = edge_dim if self.has_edges else 0
         adj_dim = adj_dim if exists(num_adj_degrees) else 0
 
-        has_global_attn = global_linear_attn_every > 0    #全局的attention
+        has_global_attn = global_linear_attn_every > 0
         self.global_tokens = None
         if has_global_attn:
-            self.global_tokens = nn.Parameter(torch.randn(num_global_tokens, dim))  #[4,dim]
+            self.global_tokens = nn.Parameter(torch.randn(num_global_tokens, dim))
 
         self.layers = nn.ModuleList([])
         for ind in range(depth):
@@ -394,7 +390,7 @@ class EGNN_Network(nn.Module):
             self.layers.append(nn.ModuleList([
                 GlobalLinearAttention(dim = dim, heads = global_linear_attn_heads, dim_head = global_linear_attn_dim_head) if is_global_layer else None,
                 EGNN(dim = dim, edge_dim = (edge_dim + adj_dim), norm_feats = True, **kwargs),
-            ]))   #一层是类似GNN全局线性自注意力+EGNN也是聚合几何和非几何信息
+            ]))
         self.linear = nn.Linear(dim + coor_dim, 1)
         self.sigmoid = nn.Sigmoid
 
@@ -407,10 +403,10 @@ class EGNN_Network(nn.Module):
         mask = None,
         return_coor_changes = False
     ):
-        b, device = feats.shape[0], feats.device  #b是第1维，这里有点问题是
+        b, device = feats.shape[0], feats.device
 
-        if exists(self.token_emb):  #feats是(1, 1024)
-            feats = self.token_emb(feats)   #点嵌入
+        if exists(self.token_emb):
+            feats = self.token_emb(feats)
 
         if exists(self.pos_emb):
             n = feats.shape[1]
@@ -442,7 +438,7 @@ class EGNN_Network(nn.Module):
                 adj_emb = self.adj_emb(adj_indices)
                 edges = torch.cat((edges, adj_emb), dim = -1) if exists(edges) else adj_emb
 
-        # setup global attention
+
 
         global_tokens = None
         if exists(self.global_tokens):
